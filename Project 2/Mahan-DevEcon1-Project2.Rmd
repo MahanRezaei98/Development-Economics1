@@ -1,0 +1,2042 @@
+---
+title: "Project II - Poverty and Inequality"
+author: "Mahan Rezaei"
+date: "`r Sys.Date()`"
+output:
+    html_document:
+        theme: readable    
+        highlight: kate
+        toc: true    
+        toc_depth: 4
+        toc_float: true    
+        df_print: paged
+        code_folding: hide    
+        css: styles.css
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+> **"Our lives begin to end the day we become silent about things that
+> matter."**
+>
+> *— Martin Luther King Jr.*
+
+[**Poverty**]{.underline} and [**Inequality**]{.underline} are important
+concepts in economics and social sciences that are closely related but
+distinct. These two concepts are of great importance in development
+economics because they are among the topics that development economists
+research on, as well as their causes and the consequences of various
+policies in both developed and developing countries. Both indicate
+deprivation in access to resources, opportunities, and outcomes among
+certain individuals or groups.
+
+### [**Poverty**]{style="color: Red;"}
+
+Poverty is a state or condition in which an individual lacks the
+sufficient financial resources and essentials for a basic standard of
+living.
+
+**Causes of Poverty** include market failures like:
+
+-   Labor Market Frictions
+
+-   Credit Constraints
+
+-   Human Capital Development
+
+### [**Inequality**]{style="color: Red;"}
+
+Inequality refers to the unequal distribution of income, wealth,
+opportunities, and access to resources across individuals or groups
+within a society.
+
+**Causes of Inequality** include:
+
+-   Unequal Access to Resources
+
+-   Differences in Education and Skills
+
+-   Wealth Accumulation
+
+------------------------------------------------------------------------
+
+This project aims to analyze the socioeconomic landscape of Iran by
+examining both poverty and inequality. It includes estimating poverty
+metrics such as the poverty line, poverty gap, and multidimensional
+poverty index (MPI), as well as inequality indicators like the Gini
+coefficient and the share of the top 1%.
+
+#### Necessary Packages
+
+First, we install the necessary packages for this project.
+
+```{r include=FALSE}
+# packages <- c(
+#   "dplyr", "data.table", "knitr", "ggplot2", "tidyverse", "readxl",
+#   "tidyr", "shiny", "leaflet", "mdbr", "Hmisc", "labelled", "ineq",
+#   "RSocrata", "shinythemes", "RColorBrewer", "rsconnect", "haven",
+#  "forcats", "writexl", "psych", "foreign", "kableExtra", "htmltools")
+# missing_packages <- packages[!packages %in% installed.packages()]
+# if (length(missing_packages) > 0) {
+#   install.packages(missing_packages)}
+# # Check if all packages were installed successfully
+# installed.packages()
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+```
+
+Then, we load these packages.
+
+```{r setup, results='hide', warning=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(data.table)
+library(knitr)
+#library(ggplot2)
+library(tidyverse)
+library(readxl)
+library(tidyr)
+library(shiny)
+library(leaflet)
+library(mdbr)
+library(Hmisc)
+library(leaflet)
+#library(tigris)
+library(sf)
+library(readxl)
+library(tidyverse)
+library(shiny)
+library(labelled)
+library(RSocrata)
+library(shinythemes)
+library(RColorBrewer)
+library(rsconnect)
+library(haven)
+#library(mapview)
+library(forcats)
+library(writexl)
+library(psych)
+library(foreign)
+library(kableExtra)
+library(htmltools)
+library(ineq)
+library(glue)
+library(scales)
+library(shiny)
+library(leaflet)
+library(sf)
+library(dplyr)
+library(htmltools)
+library(htmlwidgets)
+```
+
+#### Import the Data
+
+First, we must download and import the data from the
+[Website](https://amar.org.ir/statistical-information/statid/54141) of
+Iran's Statistical Center of Iran.
+
+Here, we load data by specifying our file path. The data set used for
+this project is the **Households Expenditure and Income Survey (HEIS)**
+for the **year 1402**, which contains information on household
+expenditures on durable and non-durable goods, sources of income,
+residence, and other factors in different provinces, collected in
+different tables.
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+#The following command makes your mdb-convert-tool compatible with the path of Rstudio (optional for macOS)
+Sys.setenv(PATH = paste("/opt/homebrew/bin", Sys.getenv("PATH"), sep = ":"))
+HEIS <- mdb.get(file = "/Users/mahan/Desktop/TEIAS/3th-Semester/DevEcon1/Project2/Data/HEIS/1402/HEIS1402.mdb")
+```
+
+The **HEIS** data set displays urban and rural households in different
+tables. Each table has its own aim to indicate some dimensions of
+households.
+
+**HEIS 1402** includes the following tables:
+
+-   **U1402Data & R1402Data:** survey details section
+
+-   **U1402P1 & R1402P1:** Social characteristics of household members
+
+-   **U1402P2 & R1402P2:** Location details
+
+-   **U1402P3S & R1402P3S** (S = 01, $\cdots$ , 12 , S $\neq$ 4) :
+    Household expenditure on non-durable goods
+
+-   **U1402P3S04 & R1402P3S04:** Housing costs section
+
+-   **U1402P3S13 & R1402P3S13:** Household expenditure on durable goods
+
+-   **U1402P3S14 & R1402P3S14:** Household investment in last 12 months
+
+-   **U1402P4S1 & R1402P4S1:** Income of employed household members from
+    public sector
+
+-   **U1402P4S2 & R1402P4S2:** Income of employed household members from
+    private sector
+
+-   **U1402P4S3 & R1402P4S3:** Miscellaneous household income
+
+-   **U1402P4S4 & R1402P4S4:** Household income from government Cash
+    Transfers (Subsidy)
+
+In this part, we extract all the tables from the HEIS data set and add a
+new column called "Urban_Rural".
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Removing the empty tables from HEIS 1402
+HEIS[["R1402P3S10"]] <- NULL
+HEIS[["U1402P3S10"]] <- NULL
+
+origin_names <- names(HEIS)
+# Iterating over data frames in HEIS and modifying them 
+HEIS <- lapply(seq_along(HEIS), function(idx) {
+    name <- origin_names[idx]
+    #Extracting the first character of the name
+    first_char <- substr(name, 1, 1)
+    #Checking if the first character of the name is either "R" (Rural) or "U" (Urban).
+    if (first_char == "R" || first_char == "U") {
+      # Adding a new column Urban_Rural and filling with "R" and "U"
+        HEIS[[idx]]$Urban_Rural <- first_char}
+    return(HEIS[[idx]])})
+# Reassigning original names
+names(HEIS) <- origin_names
+# Assigning each data frame back to the global environment
+invisible(lapply(names(HEIS), function(x) assign(x,HEIS[[x]],envir=.GlobalEnv)))
+```
+
+In this part, we combine the rural and urban tables with the same names.
+
+```{r}
+# Function to merge R and U tables and rename them to 'RU'
+merge_tables <- function() {
+  # Loop through each name and check for the pattern
+  for (name in origin_names) {
+    # If a table starts with 'R', find the corresponding 'U' table
+    if (substr(name, 1, 1) == "R") {
+      u_name <- paste0("U", substr(name, 2, nchar(name)))
+      # Merge the R and U tables if the U table exists
+      if (u_name %in% origin_names) {
+        # Merge the R and U tables
+        merged_data <- rbind(HEIS[[name]], HEIS[[u_name]])
+        # Create the new name with 'RU' prefix
+        new_name <- paste0("RU", substr(name, 2, nchar(name)))
+        # Assign the merged data to the new name
+        assign(new_name, merged_data, envir = .GlobalEnv)
+        # Remove the original R and U tables
+        rm(list = c(name, u_name), envir = .GlobalEnv)}}}}
+# Call the function
+merge_tables()
+# Remove the unnecarry data and function
+rm(HEIS)
+```
+
+Now, the data tables are available to start the cleaning process.
+
+#### Data Cleaning Process:
+
+As reported in the project text, we first create a column that
+represents the weight of household members and add it to our table.
+
+-   **Head of Household (HH):** $\text{Weight} = 1$
+
+-   **Non-head above 18 years old:** $\text{Weight} = 0.8$
+
+-   **Non-head under 18 years old:** $\text{Weight} = 0.5$
+
+```{r}
+# Creating the Weight column in our data set
+RU1402P1 <- RU1402P1 %>%
+  mutate(Weight = case_when(
+    DYCOL03 == 1 ~ 1,                         # If DYCOL03 == 1, assign 1 to weight
+    DYCOL03 != 1 & DYCOL05 >= 18 ~ 0.8,       # If DYCOL03 != 1 and DYCOL05 >= 18, assign 0.8
+    DYCOL03 != 1 & DYCOL05 < 18 ~ 0.5,        # If DYCOL03 != 1 and DYCOL05 < 18, assign 0.5
+    TRUE ~ NA_real_))
+```
+
+In this section, we label the variables in the tables to enhance file
+readability and also create a province variable and add it to the
+tables.
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Part 0
+# Assign each province to their codes
+Province <- c(Markazi = "00", Ardabil = "24", Bushehr = "18", `Chaharmahal and Bakhtiari` = "14",
+  `East Azerbaijan` = "03", Fars = "07", Gilan = "01", Golestan = "27",
+  Hamadan = "13", Hormozgan = "22", Ilam = "16", Isfahan = "10",
+  Kerman = "08", Kermanshah = "05", Khuzestan = "06", `Kohgiluyeh and Boyer-Ahmad` = "17",
+  Kurdistan = "12", Lorestan = "15", Alborz = "30", Mazandaran = "02",
+  `North Khorasan` = "28", Qazvin = "26", Qom = "25", `Razavi Khorasan` = "09",
+  Semnan = "20", `Sistan and Baluchestan` = "11", `South Khorasan` = "29", Tehran = "23",
+  `West Azerbaijan` = "04", Yazd = "21", Zanjan = "19")
+  
+# This data frame shows specifications of the survey
+RU1402Data <- RU1402Data %>% 
+  rename(khanevartype = NoeKhn)  %>% 
+  # A new column "province" is added to the data frame which contains the mapped names of province
+  mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province))
+
+##############################
+# Part 1
+# Relation to head
+relation <- c(head="1", spouse="2", child="3", childinlaw="4", grandchild="5", parent="6", sibling="7", relative="8", nonrelative="9")
+# Gender dummy variable
+gender <- c(Male="1", Female="2")
+# Literacy dummy variable 
+literacy <- c(literate="1", illiterate="2")
+# Dummy variable for answering Questions
+yesno <- c(Yes="1", No="2")
+# Degree of Education dummy variable
+education <- c(Elemantary="1", Secondary="2", HighSchool="3", Diploma="4", College="5", Bachelor="6", Master="7", PhD="8", Other="9")
+# Activity Status
+occupation <- c(employed="1", unemployed="2", IncomeWOJob="3", Student="4", Housewife="5", Other="6")
+# Marital Status
+marital <- c(Married ="1", Widowed="2", Divorced="3", Single="4")
+
+# This data frame shows social characteristics of family members (Renaming Columns)
+RU1402P1 <- RU1402P1 %>% 
+  rename(
+    member = DYCOL01,
+    relation = DYCOL03,
+    gender = DYCOL04,
+    age = DYCOL05,
+    literacy = DYCOL06,
+    is_studying = DYCOL07,
+    education_deg = DYCOL08,
+    occupational_stat = DYCOL09,
+    marital_stat = DYCOL10) %>%  
+  mutate(across(where(is.character), as.integer),
+         across(c(relation,gender,literacy,is_studying,education_deg,occupational_stat,marital_stat), as.factor),
+         relation = fct_recode(relation, !!!relation), 
+         gender = fct_recode(gender, !!!gender),
+         literacy = fct_recode(literacy, !!!literacy), 
+         is_studying = fct_recode(is_studying, !!!yesno),
+         education_deg = fct_recode(education_deg, !!!education), 
+         occupational_stat = fct_recode(occupational_stat, !!!occupation),
+         marital_stat = fct_recode(marital_stat, !!!marital))
+
+```
+
+```{r warning=FALSE}
+##############################
+# Part 2
+# Type of occupation of the residence
+tenure <- c(OwnedEstateLand="1", OwnedEstate="2", Rent="3", Mortgage="4", Service="5", Free="6", Other="7")
+# Major materials
+material <- c(MetalBlock="1", BrickWood="2", Cement="3", Brick="4", Wood="5", WoodKesht="6", KeshtGel="7", Other="8")
+# Type of used fuel in the cooking
+fuel <- c(Oil="1", Gasoline="2", LiquidGas="3", NaturalGas="4", Electricity="5", Wood="6", AnimalOil="7", Coke="8", Other="9", None="10" )
+# Type of used fuel in heating
+fuel1 <- c(Oil="11", Gasoline="12", LiquidGas="13", NaturalGas="14", Electricity="15", Wood="16", AnimalOil="17", Coke="18", Other="19", None="20" )
+# Type of used fuel in providing Hot Water
+fuel2 <- c(Oil="21", Gasoline="22", LiquidGas="23", NaturalGas="24", Electricity="25", Wood="26", AnimalOil="27", Coke="28", Other="29", None="30" )
+
+# This data frame shows Residence details (Renaming Columns)
+RU1402P2 <- RU1402P2 %>% 
+  rename(
+    tenure = DYCOL01,
+    room = DYCOL03,
+    space = DYCOL04,
+    construction = DYCOL05,
+    material = DYCOL06,
+    vehicle = DYCOL07,
+    motorcycle = DYCOL08,
+    bicycle = DYCOL09,
+    radio = DYCOL10,
+    radiotape = DYCOL11,
+    TVbw = DYCOL12,
+    TV = DYCOL13,
+    VHS_VCD_DVD = DYCOL14,
+    computer = DYCOL15,
+    cellphone = DYCOL16,
+    freezer = DYCOL17,
+    refridgerator = DYCOL18,
+    fridge = DYCOL19,
+    stove = DYCOL20,
+    vacuum = DYCOL21,
+    washingmachine = DYCOL22,
+    sewingmachine = DYCOL23,
+    fan = DYCOL24,
+    evapcoolingportable = DYCOL25,
+    splitportable = DYCOL26,
+    dishwasher = DYCOL27,
+    microwave = DYCOL28,
+    none = DYCOL29,
+    pipewater = DYCOL30,
+    electricity = DYCOL31,
+    pipegas = DYCOL32,
+    telephone = DYCOL33,
+    internet  = DYCOL34,
+    bathroom = DYCOL35,
+    kitchen = DYCOL36,
+    evapcooling = DYCOL37,
+    centralcooling = DYCOL38,
+    centralheating = DYCOL39,
+    package = DYCOL40,
+    split = DYCOL41,
+    wastewater = DYCOL42,
+    cookingfuel = DYCOL43,
+    heatingfuel = DYCOL44,
+    waterheatingfuel = DYCOL45) %>% 
+  mutate(across(where(is.character), as.integer),
+         across(c(tenure,material,cookingfuel,heatingfuel,waterheatingfuel), as.factor),
+         tenure = fct_recode(tenure, !!!tenure), 
+         material = fct_recode(material, !!!material),
+         cookingfuel = fct_recode(cookingfuel, !!!fuel), 
+         heatingfuel = fct_recode(heatingfuel, !!!fuel1),
+         waterheatingfuel = fct_recode(waterheatingfuel, !!!fuel2),
+         across(vehicle:wastewater, ~!is.na(.x)))
+```
+
+```{r warning=FALSE}
+##############################
+# Part 3, Table 1
+# This data frame shows food and tobacco expenditures (Renaming Columns)
+RU1402P3S01 <- RU1402P3S01 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    gram = DYCOL03,
+    kilogram = DYCOL04,
+    price = DYCOL05,
+    value = DYCOL06 ) %>% 
+  mutate(
+    across(c(price,value,kilogram),  ~ as.numeric(as.character(.x)) ),
+    table = 1L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))                                                                                                                                                            
+# Part 3, Table 2
+# This data frame shows drink expenditures (Renaming Columns)
+RU1402P3S02 <- RU1402P3S02 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    gram = DYCOL03,
+    kilogram = DYCOL04,
+    price = DYCOL05,
+    value = DYCOL06 ) %>% 
+  mutate(
+    table = 2L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))  
+  
+
+
+# Part 3, Table 3
+RU1402P3S03 <- RU1402P3S03 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03 ) %>% 
+  mutate(
+    table = 3L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))  
+# Part 3, Table 4
+# This data frame shows the housing costs (Renaming columns)
+RU1402P3S04 <- RU1402P3S04 %>% 
+  rename(
+    goods_code = DYCOL01,
+    mortgage = DYCOL02,
+    provision_type = DYCOL03,
+    value = DYCOL04 ) %>% 
+  mutate(table = 4L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free"))) 
+# Part 3, Table 5
+RU1402P3S05 <- RU1402P3S05  %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03 ) %>% 
+  mutate(table = 5L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+# Part 3, Table 6
+RU1402P3S06 <- RU1402P3S06  %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(table = 6L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+# Part 3, Table 7
+RU1402P3S07 <- RU1402P3S07 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(
+    table = 7L)  %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+
+# Part 3, Table 8
+RU1402P3S08 <- RU1402P3S08 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(
+    table = 8L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+# Part 3, Table 9
+RU1402P3S09 <- RU1402P3S09 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(
+    table = 9L) %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+# Part 3, Table 11
+RU1402P3S11 <- RU1402P3S11 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(
+    table = 11L)  %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+# Part 3, Table 12
+RU1402P3S12 <- RU1402P3S12 %>% 
+  rename(
+    goods_code = DYCOL01,
+    provision_type = DYCOL02,
+    value = DYCOL03) %>% 
+  mutate(
+    table = 12L)  %>% 
+  mutate(provision_type=factor(provision_type, levels = c(1,2,3,4,5,6,7,8),
+                                labels = c("purchased",
+                                           "homemade",
+                                            "publicservice",
+                                            "cooperativeservice",
+                                            "privateservice",
+                                            "agriculture",
+                                            "nonagriculture",
+                                            "free")))
+```
+
+Here, we append the "Weight" column from RU1402P1 based on their
+"Address" to datasets which start with "RU1402P3S"
+
+```{r warning=FALSE}
+# Merging Process
+RU1402P1_getweight <- select(RU1402P1, Address, Weight)
+# Generate potential data set names
+datasetP3_names <- paste0("RU1402P3S", sprintf("%02d", 1:12))
+# Filter names of datasets that actually exist in this environment
+P3_datasets <- Filter(function(name) exists(name, envir = .GlobalEnv), datasetP3_names)
+# Apply the transformation and merge with RU1402Data_selected to each data set
+P3weight_datasets <- lapply(mget(P3_datasets, envir = .GlobalEnv), function(df) {
+  df %>% 
+    mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province)) %>%
+    left_join(RU1402P1_getweight, by = "Address")})
+invisible(lapply(names(P3weight_datasets), function(x) assign(x,P3weight_datasets[[x]],envir=.GlobalEnv)))
+# Removing the unnecessary data sets
+#rm(RU1402P1_getweight)
+rm(P3weight_datasets)
+```
+
+------------------------------------------------------------------------
+
+## Poverty Analysis
+
+### 1. Estimation of the Absolute Poverty Line
+
+Based on an article from
+[FAO](https://openknowledge.fao.org/server/api/core/bitstreams/212900be-f089-4659-9368-44696313456f/content)
+about **"Impacts of Policies on Poverty (Absolute Poverty Lines)"**,
+there are some methods to calculate the absolute poverty line.
+
+-   **Food energy intake (FEI):** Enough food to meet energy
+    requirements
+
+-   **Cost of basic needs (CBN):** A consumption bundle with food and
+    nonfood
+
+-   **Consumption insufficiency method (CI):** All necessary goods and
+    services to satisfy the basic needs
+
+-   **Budget standard method (BS):** All necessary goods and services to
+    satisfy the basic needs $+$ basic minimum for social lives
+
+All of the above methods define a [**Set of
+goods**]{style="color: blue;"} that would ensure a standard of living
+and convert this set of goods into [**Monetary
+Values**]{style="color: blue;"}. The final aim is to define a poverty
+line **(Threshold)** below which an individual is considered poor.
+
+The **food energy intake (FEI)** methodology defines the [**minimum
+food**]{.underline} intake needed by a given individual to lead a decent
+life. By this definition, those people who can't afford the cost of the
+FEI are [**poor**]{.underline}. In addition, by definition, FEI is an
+**absolute concept of poverty** that is entirely
+[**food-based**]{style="color: blue;"}. This measure is a good indicator
+of poverty in those countries where a [**large**]{style="color: blue;"}
+part of the population spends a significant fraction of their budget on
+food (Specially for [less developed economies]{.underline}).
+
+In this part, we only consider the first method which is **FEI**. Here,
+we calculate the absolute poverty line based on the food bundle proposed
+by the Ministry of Health, providing **2,100 Kilo Calories per day** and
+the required protein contents.
+
+The following table is a food bundle designed by **Iran's Ministry of
+Health**, which is by the dietary pattern of an adult and provides 2100
+kilo calories daily.
+
+::: {dir="rtl" style="text-align: center;"}
+### سبد غذایی تامین کننده ۲۱۰۰ کیلو کالری در روز (منطبق با الگوی غذایی بالغین)
+:::
+
+::: {dir="rtl"}
+|        ماده غذایی        |  مقدار سبد غذایی ماهانه  |
+|:------------------------:|:------------------------:|
+|           نان            |        ۸ کیلوگرم         |
+|           برنج           |        ۳ کیلوگرم         |
+|  ماکارونی (رشته فرنگی)   |    ۷۰۰ گرم (یک بسته)     |
+|    عدس (دیگر حبوبات)     |         ۶۰۰ گرم          |
+|   سیب زمینی (نخود سبز)   |       ۱/۵ کیلوگرم        |
+|           شیر            |      ۷ کیسه ۱ لیتری      |
+|           پنیر           |         ۴۵۰ گرم          |
+|           ماست           |        ۳ کیلوگرم         |
+|        گوشت قرمز         |       ۱/۲ کیلوگرم        |
+|  گوشت سفید (ماهی منجمد)  | ۱/۵ کیلوگرم (یک عدد مرغ) |
+|         تخم مرغ          |          ۱۰ عدد          |
+|        روغن مایع         |        ۹۰۰ سی سی         |
+| شکر (قند یا عسل یا مربا) |        ۱ کیلوگرم         |
+|           میوه           |         ۶۰ واحد          |
+|     سبزی های برگ سبز     |         ۶۰ واحد          |
+|       دیگر سبزی ها       |         ۶۰ واحد          |
+:::
+
+First, We extract food items from data and label them.
+
+```{r message=FALSE, warning=FALSE}
+# For the materials that has replacement we add | instead &
+RU1402P3S01 <- RU1402P3S01 %>% 
+  mutate(label = case_when(
+    goods_code >= 11141 & goods_code <= 11156 ~ "bread",
+    goods_code >= 11111 & goods_code <= 11118 ~ "rice",
+    goods_code == 11164 ~ "spaghetti", #Considering (noodle)
+    goods_code == 11731 | goods_code == 11725 ~ "potato", # Considering (green pea)
+    goods_code >= 11411 & goods_code <= 11414 ~ "milk",
+    goods_code >= 11424 & goods_code <= 11426 ~ "yoghurt",
+    (goods_code == 11241) & (goods_code >= 11211 & goods_code <= 11224) ~ "red meat",
+    goods_code >= 11441 & goods_code <= 11443 ~ "egg",
+    goods_code >= 11428 & goods_code <= 11431 ~ "cheese",
+    goods_code >= 11611 & goods_code <= 11643 ~ "fruit",
+    (goods_code >= 11711 & goods_code <= 11715) | (goods_code >= 11721 & goods_code <= 11753) & goods_code != 11731 ~ "vegetables", # Considering both green and non green vegetables
+    goods_code == 11533 ~ "oil",
+    goods_code == 11812 | goods_code == 11811 | goods_code == 11821 | goods_code == 11823 ~ "sugar", # Considering (Jam, cube sugar, honey)
+    goods_code == 11768 | (goods_code >= 11761 & goods_code <= 11769) ~ "lentil", #considering other legumes)
+    (goods_code == 11312 & goods_code == 11314) | (goods_code >= 11231 & goods_code <= 11239) ~ "white meat", # considering fish
+    TRUE ~ NA_character_))
+```
+
+In this part, we modify the "Kilogram" column and generate a data frame
+to indicate the above food bundle table. Here we need to have some
+assumptions about some foods. Based on the search on internet, we create
+our assumption (there may not be the exact weight of each food but it's
+a good estimation):
+
+-   **One medium egg:** **50 grams**
+
+-   **One unit fruit: 80 grams**
+
+-   **One unit vegetable: 75 grams**
+
+-   **One liter oil: 900 grams**
+
+```{r results='hide', warning=FALSE, message = FALSE}
+P3S01_ModifiedKg <- RU1402P3S01 %>%
+  mutate(gram = ifelse(is.na(gram), 0, gram/1000)) %>% 
+  mutate(kilogram = ifelse(is.na(kilogram), 0, kilogram)) %>% 
+  mutate(kilogram = kilogram + gram) %>% 
+  select(-gram)
+# Generating the food bundle based on the above table
+food_bundle <- data.frame(
+  label = c("bread", "rice", "spaghetti", "potato", "lentil", "milk", "yoghurt",
+            "red meat", "white meat", "egg", "cheese", "fruit", "vegetables", "oil", "sugar"),
+  needs_kg = c(8, 3, 0.7, 1.5, 0.6, 7, 3, 1.2, 1.5, 0.5, 0.45, 4.8, 9, 0.8, 1))
+```
+
+Here, We use two methods to calculate the weighted mean
+price.$$\text{Weighted Mean Price}_1 = \frac{\sum_{i=1}^{n} (\text{weight}_i \times \text{value}_i)}{\sum_{i=1}^{n} (\text{weight}_i \times \text{kilogram}_i)}$$
+$$\text{Weighted Mean Price}_2 = \frac{\sum_{i=1}^{n} (\text{weight}_i \times \text{price}_i)}{\sum_{i=1}^{n} (\text{weight}_i)}$$
+
+The key differences between these two methods are:
+
+1.  The first method ($\text{Weighted Mean Price}_1$) is useful when
+    dealing with heterogeneous items with varying prices and quantities.
+
+2.  The second method ($\text{Weighted Mean Price}_2$) is useful when
+    comparing prices for the same product in different markets.
+
+We estimate the cost of this bundle for **urban** and **rural** regions
+in each province to determine the absolute poverty line.
+
+The following table summarizes the results from **the Absolute Food
+Poverty Line**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+TC_province1 <- P3S01_ModifiedKg %>%
+  group_by(label, province, Urban_Rural) %>%
+  dplyr::summarize(wmean_price = sum(value * Weight, na.rm = TRUE) / sum(kilogram * Weight, na.rm = TRUE)) %>%
+  left_join(food_bundle, by = "label") %>%
+  mutate(total_product_cost = wmean_price * needs_kg) %>%
+  group_by(province, Urban_Rural) %>%
+  dplyr::summarize(total_bundle_price = sum(total_product_cost, na.rm = TRUE))
+
+TC_province2 <- P3S01_ModifiedKg %>%
+  group_by(label, province, Urban_Rural) %>%
+  dplyr::summarize(wmean_price = weighted.mean(price, Weight, na.rm = TRUE)) %>%
+  left_join(food_bundle, by = "label") %>% 
+  mutate(total_product_cost = wmean_price * needs_kg) %>%
+  group_by(province, Urban_Rural) %>%
+  summarise(total_bundle_price = sum(total_product_cost, na.rm = TRUE))
+
+TC_province1 <- TC_province1 %>%
+  left_join(TC_province2 , by = c("province", "Urban_Rural")) %>%
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>%
+  arrange(province, Urban_Rural, -total_bundle_price.x) %>%
+  rename(
+    First_Method = `total_bundle_price.x`,
+    Second_Method = `total_bundle_price.y`)
+
+kable(
+  TC_province1 %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Absolute Poverty Line (Individual Level - Rial)" = ncol(TC_province1))) %>%
+  row_spec(which(TC_province1$Urban_Rural == "Rural"), background = "green") %>%
+  row_spec(which(TC_province1$Urban_Rural == "Urban"), background = "orange")
+```
+
+In the first method, the cost of food bundle for one person in a month
+ranges from **9,576,627 Rial** in rural areas of
+[**'Lorestan'**]{style="color: blue;"} province to **14,434,812 Rial**
+in rural areas of [**'Hormozgan'**]{style="color: blue;"} province.
+Provinces with highest poverty line are
+[**'Hormozgan'**]{style="color: blue;"} and
+[**'Mazandaran'**]{style="color: blue;"} in both areas.
+
+In the second method, the cost of food bundle for one person in a month
+ranges from **10,381,877 Rial** in rural areas of
+[**'Golestan'**]{style="color: blue;"} province to **16,844,817 Rial**
+in rural areas of [**'Hormozgan'**]{style="color: blue;"} province.
+
+Provinces with highest absolute poverty line are
+[**'Hormozgan'**]{style="color: blue;"} and
+[**'Mazandaran'**]{style="color: blue;"}. Provinces with lowest absolute
+poverty line are [**'Lorestan'**]{style="color: blue;"} and [**'North
+Khorasan'**]{style="color: blue;"}.
+
+------------------------------------------------------------------------
+
+### 2. Estimation of the Relative Poverty Line
+
+Based on an article from [FAO](https://www.fao.org/4/am385e/am385e.pdf)
+about **"Impacts of Policies on Poverty (Relative Poverty Lines)"**,
+there are some methods to calculate the relative poverty line.
+
+-   **Income levels (IL):** percentage of mean/median income below
+
+-   **Income positions (IP):** income quantile below
+
+This approach considers the **welfare position** of each household about
+the welfare position of other individuals or households. These methods
+rely on a **threshold** that is relative to either **income** or
+**expenditure**.
+
+It is usually taken **income** as a reference variable. However, in
+applied works, **expenditure** is sometimes taken as a more correct
+welfare indicator than income, as transitory shocks may drive observed
+income far from its permanent level. Expenditures are thought to better
+reflect this level of permanent income.
+
+According to the low accuracy of our data in reporting income, we
+concentrate on **expenditure** rather than income as a monetary
+indicator.
+
+1.  **Traditional Approach (IL):**
+
+We focus on 50 % of the median per capita expenditure as the poverty
+threshold.
+
+We assess total spending on non-durable goods for individuals in all
+provinces, including both urban and rural areas.
+
+```{r echo=TRUE, warning=FALSE}
+# Combining the tables which starts with P3S
+combined_p3 <- bind_rows(mget(P3_datasets, envir = .GlobalEnv))
+
+# Calculating the total expenditures for individuals in each province, including both urban and rural areas.
+total_expenditure <- combined_p3 %>%
+  dplyr::group_by(Address, province, Urban_Rural, Weight) %>%
+  dplyr::summarize(total_value = sum(value, na.rm = TRUE), .groups = 'drop')
+
+# Calculate 50% of the median in each province, including both urban and rural areas
+relative_line <- total_expenditure %>%
+  dplyr::group_by(province, Urban_Rural) %>%
+  dplyr::summarize(Half_Median = 0.5 * median(total_value, na.rm = TRUE), .groups = 'drop') %>%
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>%
+  arrange(province, Urban_Rural, -Half_Median) 
+
+kable(
+  relative_line %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Relative Poverty Line - Traditional Approach (Individual Level - Rial)" = ncol(relative_line))) %>%
+  row_spec(which(relative_line$Urban_Rural == "Rural"), background = "violet") %>%
+  row_spec(which(relative_line$Urban_Rural == "Urban"), background = "yellow")
+```
+
+3 Provinces with highest relative poverty line are
+[**'Tehran'**]{style="color: blue;"} and
+[**'Fars'**]{style="color: blue;"} and
+[**'Bushehr'**]{style="color: blue;"} in urban areas. 3 Provinces with
+lowest relative poverty line are [**'Sistan and
+Baluchestan'**]{style="color: blue;"} and [**'South
+Khorasan'**]{style="color: blue;"} and
+[**'Semnan'**]{style="color: blue;"} in rural areas.
+
+2.  **Hybrid Approach:**
+
+It is important to analyze the food bundle of very poor individuals, as
+they are often stuck in a poverty trap. This analysis will enable us to
+better target assistance and improve their access to necessary food
+items.
+
+-   In this part, we first rank households by per capita non-durable
+    expenditure.
+
+```{r warning=FALSE, include=FALSE}
+# sorting per capita non-durable expenditure
+sorted_total_expenditure <- total_expenditure %>%
+  arrange(total_value)
+```
+
+-   Second, we identify the bottom 20% of households in both urban and
+    rural zones.
+
+```{r warning=FALSE, include=FALSE}
+bottom_20 <- sorted_total_expenditure %>%
+  group_by(Urban_Rural) %>%
+  filter(row_number() <= ceiling(0.2 * n())) # Select the first 20% of rows
+```
+
+-   Third, we analyze the food bundle typically consumed by these
+    households.
+
+In this step, we need to match the bottom 20% of households to the
+**RU1402P3S01** table to find their food bundle by "label" column.
+
+```{r warning=FALSE, include=FALSE}
+address_bottom_20 <- bottom_20 %>% 
+  select(Address)
+
+filtered_RU1402P3S01 <- RU1402P3S01 %>%
+  semi_join(address_bottom_20, by = "Address")
+```
+
+In this step, we need to get the goods code that they have NA label but
+they are consumed typically by these households. We set our threshold at
+4000. This means that we only consider the goods with NA labels which
+consumed by more than 4000 of the bottom 20% of households.
+
+```{r}
+NA_label <- filtered_RU1402P3S01 %>% 
+  filter(is.na(label)) %>% 
+  group_by(goods_code) %>% 
+  dplyr::summarize(count = n(), .groups = 'drop') %>%
+  filter(count>4000) %>%
+  arrange(-count)
+```
+
+Here, we set the labels for these goods and consider them in their food
+bundle.
+
+```{r}
+NA_label <- NA_label %>% 
+  mutate(label = case_when(
+    goods_code == 11921 ~ "tomato paste",
+    goods_code == 12211 ~ "soda",
+    goods_code == 11911 ~ "salt",
+    goods_code == 12112 ~ "non-irani tea",
+    goods_code == 11665 ~ "chips & pofak",
+    goods_code == 11531 ~ "margarine",
+    goods_code == 11171 ~ "biscuit",
+    goods_code == 11914 ~ "turmeric",
+    goods_code == 11423 ~ "ice cream",
+    goods_code == 11161 ~ "flour",
+    goods_code == 11172 ~ "cake",
+    TRUE ~ NA_character_
+  )) %>% 
+    filter(!is.na(label))
+# Indicate the table 
+kable(
+  NA_label %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  column_spec(1, background = "olivedrab1") %>%
+  column_spec(2, background = "slateblue1") %>%
+  column_spec(3, background = "deepskyblue")
+```
+
+In addition to the food bundle defined by the **Iran's Ministry of
+Health**, we found goods that are typically consumed by the bottom 20%
+of households. These new goods include:
+
+1.  رب گوجه فرنگی
+
+2.  انواع نوشابه
+
+3.  انواع نمک
+
+4.  انواع چای خارجی
+
+5.  پفک و چیپس
+
+6.  انواع روغن نباتی جامد و مارگارین
+
+7.  انواع بیسکوییت و ویفر
+
+8.  زردچوبه
+
+9.  انواع بستنی شیری و میوه ای
+
+10. آرد گندم
+
+11. انواع کیک ساده
+
+In this step, we convert the "gram" column to "kilogram". Then we assign
+a label to this new code of goods consumed by the bottom 20% of poor
+households.
+
+```{r warning=FALSE, include=FALSE}
+filtered_RU1402P3S01 <- filtered_RU1402P3S01 %>% 
+  dplyr::group_by(label, Address, province, Urban_Rural) %>%
+  mutate(gram = ifelse(is.na(gram), 0, gram/1000), # Convert grams to kilograms and handle NA
+         kilogram = kilogram + gram) %>%
+  select(-gram) 
+
+filtered_RU1402P3S01 <- filtered_RU1402P3S01 %>%
+  # Drop rows where both kilogram and price are NA
+  filter(!(is.na(kilogram) & is.na(price))) %>%
+  mutate(kilogram = ifelse(is.na(kilogram) & !is.na(value) & !is.na(price) & price != 0,
+                           value / price, kilogram))
+# Set the labels for the goods that are consumed typically at the threshold of 3750 frequency
+filtered_RU1402P3S01 <- filtered_RU1402P3S01 %>% 
+  mutate(label = case_when(
+    goods_code == 11921 ~ "tomato paste",
+    goods_code == 12211 ~ "soda",
+    goods_code == 11911 ~ "salt",
+    goods_code == 12112 ~ "non-irani tea",
+    goods_code == 11665 ~ "chips & pofak",
+    goods_code == 11531 ~ "margarine",
+    goods_code == 11171 ~ "biscuit",
+    goods_code == 11914 ~ "turmeric",
+    goods_code == 11423 ~ "ice cream",
+    goods_code == 11161 ~ "flour",
+    goods_code == 11172 ~ "cake",
+    TRUE ~ label))
+```
+
+The following code generates the new food bundle.
+
+```{r}
+# Get the unique values of label column
+uniq <- unique(filtered_RU1402P3S01$label)
+
+n_rows <- ceiling(length(uniq) / 2)
+uniq_table <- data.frame(
+  Column1 = uniq[1:n_rows],
+  Column2 = uniq[(n_rows + 1):length(uniq)])
+
+kable(uniq_table, format = "html", col.names = c("Column 1", "Column 2"), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = FALSE,
+    position = "center") %>%
+  column_spec(1, background = "wheat3", border_right = TRUE) %>%
+  column_spec(2, background = "wheat3") 
+```
+
+A **notable point** about the table above is that the new food bundle
+for the bottom 20% of households does not include [**Red
+Meat**]{style="color: Red;"}. This indicates that households in the
+lowest 20% do not incorporate [**Red Meat**]{style="color: Red;"} into
+their monthly food bundle.
+
+-   Fourth, we determine the amounts that provide 2,100 calories based
+    on this new bundle.
+
+In this step, we calculate the average food bundle of poor people below
+the 20% of bottom.
+
+The following code creates a data set to calculate the average
+consumption of each household in every province, distinguishing between
+urban and rural areas by their labels.
+
+```{r warning=FALSE, include=FALSE}
+average_consumption <- filtered_RU1402P3S01 %>%
+  dplyr::group_by(Address, province, Urban_Rural, label) %>%
+  dplyr::summarize(mean_consumption = round(weighted.mean(kilogram, Weight, na.rm = TRUE), 3), .groups = 'drop') 
+```
+
+Based on the search on this
+[Website](https://www.fatsecret.com/Default.aspx#search-food), we find
+the calories per kilogram for each item included in the new food bundle
+for the bottom 20% of households.
+
+```{r warning=FALSE, include=FALSE}
+average_consumption <- average_consumption %>%
+  mutate(cal_per_kg = case_when(
+    label == "bread" ~ 2660,
+    label == "cheese" ~ 3500,
+    label == "egg" ~ 1470,
+    label == "fruit" ~ 500,
+    label == "oil" ~ 8840,
+    label == "potato" ~ 1040,
+    label == "rice" ~ 1350,
+    label == "soda" ~ 380,
+    label == "sugar" ~ 3870,
+    label == "tomato paste" ~ 820,
+    label == "vegetables" ~ 200,
+    label == "yoghurt" ~ 990,
+    label == "white meat" ~ 2200,
+    label == "milk" ~ 500,
+    label == "biscuit" ~ 3250,
+    label == "salt" ~ 0,
+    label == "spaghetti" ~ 1570,
+    label == "zardchobe" ~ 3540,
+    label == "ice cream" ~ 2010,
+    label == "lentil" ~ 1650,
+    label == "margarine" ~ 5260,
+    label == "non-irani tea" ~ 10,
+    label == "spices" ~ 3140,
+    label == "cake" ~ 3800,
+    label == "chips & pofak" ~ 5200,
+    label == "flour" ~ 3640,
+    TRUE ~ NA_real_))
+```
+
+```{r warning=FALSE, include=FALSE}
+# Get the maximum member of each household
+address_count <- RU1402P1 %>%
+  group_by(Address) %>%
+  dplyr::summarize(member = max(member, na.rm = TRUE))
+
+# Calculate average personal calories per household and ensure 'province' remains
+average_consumption <- average_consumption %>%
+  # Calculate total calories consumed per label in a month
+  mutate(total_calories = mean_consumption * cal_per_kg, na.rm = TRUE) %>%
+  # Group by Address, Province, and Urban_Rural areas
+  group_by(Address, province, Urban_Rural) %>%
+  # Calculate the total calories of households in a month in each province
+  dplyr::summarize(Total_calories = sum(total_calories, na.rm = TRUE), .groups = 'drop') %>%
+  # Calculate daily calories in each household
+  mutate(daily_calories = Total_calories / 30) %>%
+  left_join(address_count, by = "Address") %>%
+  # Calculate the daily personal calorie consumption
+  mutate(daily_personal_calories = daily_calories / member) %>%
+  # Ensure that 'province' remains for further operations
+  group_by(province, Urban_Rural) %>%
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>%
+  # Calculate the average of daily personal calories by each household in each province
+  dplyr::summarize(average_personal_calories = mean(daily_personal_calories, na.rm = TRUE), .groups = 'drop')
+```
+
+```{r echo=TRUE, warning=FALSE}
+kable(
+  average_consumption %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Average Daily Calories (Individual Level - 20% bottom)" = ncol(average_consumption))) %>%
+  row_spec(which(average_consumption$Urban_Rural == "Rural"), background = "slategray1") %>%
+  row_spec(which(average_consumption$Urban_Rural == "Urban"), background = "peachpuff1")
+```
+
+On average, people living in [**'Karaj'**]{style="color: blue;"}
+Province receive the lowest daily calorie intake among the bottom 20% of
+households nationwide, with **1,021** calories in urban areas and
+**881** calories in rural areas. On average, people living in rural
+areas of [**'Kermanshah'**]{style="color: blue;"} Province and
+[**'Chaharmahal Bakhtiari'**]{style="color: blue;"} Province receive the
+highest daily calorie intake among the bottom 20% of households
+nationwide, with **2,719** calories in
+[**'Kermanshah'**]{style="color: blue;"} Province and **2,703** calories
+in [**'Chaharmahal Bakhtiari'**]{style="color: blue;"} Province.
+
+-   Fifth, we use the cost of this new bundle as a refined poverty line
+
+```{r warning=FALSE}
+# Generate the price vector of this new bundle
+filtered_RU1402P3S01 <- left_join(filtered_RU1402P3S01,address_count, by = "Address")
+price_vector <- filtered_RU1402P3S01 %>%
+  filter(!is.na(label) & !is.na(value) & !is.na(kilogram)) %>%
+  group_by(label, province, Urban_Rural) %>%
+  dplyr::summarize(weighted_mean_price = sum(value * Weight, na.rm = TRUE) / sum(kilogram * Weight, na.rm = TRUE), .groups = 'drop')
+
+filtered_RU1402P3S01 <- filtered_RU1402P3S01 %>%
+  left_join(price_vector, by = c('label', 'province','Urban_Rural')) %>%
+  mutate(kilogram = kilogram / member)
+
+hybrid_poverty_line <- filtered_RU1402P3S01 %>%
+  group_by(label, province, Urban_Rural) %>%
+  mutate(total_product_cost = weighted_mean_price * kilogram) %>%
+  group_by(Address, province, Urban_Rural) %>%
+  summarise(total_bundle_price = sum(total_product_cost, na.rm = TRUE),.groups = 'drop') %>% 
+  group_by(province, Urban_Rural) %>% 
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>%
+  summarise(cost_new_bundle = mean(total_bundle_price, na.rm = TRUE),.groups = 'drop')
+
+kable(
+  hybrid_poverty_line %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Relative Poverty Line - Hybrid Approach (Individual Level - Rial)" = ncol(hybrid_poverty_line))) %>%
+  row_spec(which(hybrid_poverty_line$Urban_Rural == "Rural"), background = "cadetblue1") %>%
+  row_spec(which(hybrid_poverty_line$Urban_Rural == "Urban"), background = "goldenrod2")
+```
+
+3 Provinces with highest relative poverty line are
+[**'Khuzestan'**]{style="color: blue;"} and [**'Chaharmahal and
+Bakhtiari'**]{style="color: blue;"} and
+[**'Bushehr'**]{style="color: blue;"} in urban areas. 3 Provinces with
+lowest relative poverty line are [**'Gilan'**]{style="color: blue;"} and
+[**'Alborz'**]{style="color: blue;"} in rural areas and
+[**'Gilan'**]{style="color: blue;"} in urban areas.
+
+```{r}
+comparison_approach <- relative_line %>% 
+  left_join(hybrid_poverty_line, by = c("province", "Urban_Rural")) %>% 
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>% 
+  rename(Tradition_Approach = Half_Median, Hybrid_Approach = cost_new_bundle)
+
+kable(
+  comparison_approach %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Comparison of 2 approaches in Relative poverty line (Individual Level - Rial)" = ncol(comparison_approach))) %>%
+  row_spec(which(comparison_approach$Urban_Rural == "Rural"), background = "chartreuse2") %>%
+  row_spec(which(comparison_approach$Urban_Rural == "Urban"), background = "slateblue1")
+```
+
+As we anticipated, the relative poverty line determined by the **hybrid
+approach** is lower than that calculated using the **traditional
+approach**. This difference arises because the **hybrid approach** is
+based on the food bundle consumed by the bottom [20% of
+households]{.underline}, rather than the [50% median of all
+households]{.underline}. When households are limited to specific food
+items, the cost of obtaining 2,100 calories is significantly higher
+compared to when they have the option to choose from a more diverse food
+bundle. As we noted in previous part, households in the bottom 20%
+exclude red meat from their monthly food bundle.
+
+------------------------------------------------------------------------
+
+### 3. Calculation of the Poverty Gap
+
+The **poverty gap index** measures the **intensity of poverty** by
+calculating the average difference between the income of poor people and
+the income poverty line, as a percentage of the income poverty line. It
+it tells us **how much poorer the poor are** relative to the income
+poverty line.
+
+-   **A higher PGI** means that the poor are farther below the poverty
+    line.
+
+-   **A lower PGI** means that the poor are closer to the poverty line.
+
+$$
+\text{PGI}=\frac{1}{N}\sum_{j=1}^{q}\left(\frac{z-y_j}{z}\right)
+$$
+
+Where,
+
+-   $N$ is total population
+
+-   $q$ is the number of poor
+
+-   $z$ is the income poverty line
+
+-   $y_j$ is the income for person $j$ living below the poverty line
+
+In this part we estimate **poverty gap index** for each province.
+
+-   First, we need to calculate **income poverty line**.
+
+The income poverty line can be calculated by the following formula:
+
+$$
+\text{Income Poverty Line} = \frac{\text{Absolute Poverty Line}}{\text{Share Food Expenditure to Total Expenditure}} = \frac{\text{Absolute Poverty Line}}{\frac{\text{Food expenditure}}{\text{Total Expenditure}}}
+$$
+
+```{r echo=FALSE, warning=FALSE}
+# Calculating the food expenditure for individuals in each province by their weight
+food_expenditure <- RU1402P3S01 %>%
+  group_by(Address, province, Weight) %>%
+  dplyr::summarize(total_expenditure_food = sum(value, na.rm = TRUE), .groups = 'drop')
+# Calculating the weighted share of food to total expenditure for each province
+weighted_share_food <- total_expenditure %>%
+  left_join(food_expenditure, by = c("Address", "province", "Weight")) %>%
+  mutate(food_to_total = total_expenditure_food / total_value) %>%
+  filter(!is.na(food_to_total)) %>%
+  group_by(province) %>%
+  dplyr::summarize(weighted_food_to_total = weighted.mean(food_to_total, Weight, na.rm = TRUE), .groups = 'drop')
+# append this weighted share food to the table of absolute poverty line
+income_poverty_line <- TC_province1 %>%
+  left_join(weighted_share_food, by = "province") %>%
+  mutate(Urban_Rural = recode(Urban_Rural, "R" = "Rural", "U" = "Urban")) %>%
+  dplyr::mutate(income_poverty_line1 = First_Method / weighted_food_to_total) %>%
+  dplyr::mutate(income_poverty_line2 = Second_Method / weighted_food_to_total) %>%
+  select(province, Urban_Rural, income_poverty_line1, income_poverty_line2)
+
+kable(
+  income_poverty_line %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 0))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Income poverty line (2 Methods) (Individual Level - Rial)" = ncol(income_poverty_line))) %>%
+  row_spec(which(income_poverty_line$Urban_Rural == "Rural"), background = "skyblue2") %>%
+  row_spec(which(income_poverty_line$Urban_Rural == "Urban"), background = "khaki1")
+```
+
+In the first column, income poverty line 1, which comes from calculating
+the absolute poverty line, the highest income poverty line is related to
+the rural areas of [**'Ilam'**]{style="color: blue;"} and
+[**'Lorestan'**]{style="color: blue;"} provinces and the urban areas of
+[**'Ilam'**]{style="color: blue;"}, respectively. The lowest income
+poverty line is related to the urban and rural areas of
+[**'Tehran'**]{style="color: blue;"} province and the urban areas of
+[**'Gilan'**]{style="color: blue;"}, respectively. In the second column,
+income poverty line 2, which comes from calculating the absolute poverty
+line, the highest income poverty line is related to the rural areas of
+[**'Ilam'**]{style="color: blue;"}, [**'South
+Khorasan'**]{style="color: blue;"}, and
+[**'Lorestan'**]{style="color: blue;"} provinces, respectively. The
+lowest income poverty line is related to the urban areas of
+[**'Tehran'**]{style="color: blue;"} and
+[**'Gilan'**]{style="color: blue;"} provinces and the rural areas of
+[**'Tehran'**]{style="color: blue;"} province, respectively.
+
+The difference in the income poverty line in the first column is between
+**18,174,783** and **46,574,847** rials per person, and the difference
+in the income poverty line in the second column is between
+**19,366,049** and **52,192,759** rials per person.
+
+-   Second, we need to calculate the sources of household income from
+    the data sets.
+
+In this step, we clean tables that are associated with individuals'
+sources of income.
+
+```{r warning=FALSE}
+# Part 4, Table 1 (For public sector)
+RU1402P4S01 <- RU1402P4S01 %>%
+  rename(
+    member = DYCOL01,
+    is_employed = DYCOL02,
+    ISCO_code = DYCOL03,
+    ISIC_code = DYCOL04,
+    sector_status = DYCOL05,
+    daily_hours = DYCOL06,
+    weekly_days = DYCOL07,
+    income_month = DYCOL08,
+    income_year = DYCOL09,
+    wage_month = DYCOL10,
+    wage_year = DYCOL11,
+    benefit_month = DYCOL12,
+    benefit_year = DYCOL13,
+    netincome_month = DYCOL14,
+    netincome_year = DYCOL15) %>%
+    mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province))
+# Part 4, Table 2 (For private sector)
+RU1402P4S02 <- RU1402P4S02 %>%
+  rename(
+    member = DYCOL01,
+    is_employed = DYCOL02,
+    ISCO_code = DYCOL03,
+    ISIC_code = DYCOL04,
+    worker_status = DYCOL05,
+    agriculture = DYCOL06,
+    daily_hours = DYCOL07,
+    weekly_days = DYCOL08,
+    employment_cost = DYCOL09,
+    agriculture_cost = DYCOL10,
+    tool_cost = DYCOL11,
+    fee_cost = DYCOL12,
+    tax_cost = DYCOL13,
+    sale = DYCOL14,
+    netincome = DYCOL15)%>%
+    mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province))
+# Part 4, Table 3 (For other incomes)
+RU1402P4S03 <- RU1402P4S03 %>%
+  rename(
+    member = DYCOL01,
+    income_pension = DYCOL03,
+    income_rent = DYCOL04,
+    income_interest = DYCOL05,
+    income_granteduc = DYCOL06,
+    income_sale = DYCOL07,
+    income_famtransfer = DYCOL08)%>%
+    mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province))
+# Part 4, Table 4 (Column 9 of table 3 (cash transfer or subsidy))
+RU1402P4S04 <- RU1402P4S04 %>%
+  rename(
+    member = Dycol01,
+    subsidy_member = Dycol03,
+    subsidy_month = Dycol04,
+    total_subsidy = Dycol05)%>%
+    mutate(province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province))
+```
+
+Third, we calculate monthly individuals' sources of income from the
+tables.
+
+```{r warning=FALSE, include=FALSE}
+# Monthly income from RU1402P4S01
+RU1402P4S01_monthlyinc <- RU1402P4S01 %>%
+  mutate(netincome_month = netincome_year / 12) %>%
+  select(Address, netincome_month, province,Urban_Rural)
+# Monthly income from RU1402P4S02
+RU1402P4S02_monthlyinc <- RU1402P4S02 %>%
+  mutate(netincome_month = netincome / 12) %>%
+  select(Address, netincome_month, province, Urban_Rural)
+# Monthly income from RU1402P4S03
+RU1402P4S03_monthlyinc <- RU1402P4S03 %>%
+  mutate(across(starts_with("income"), ~ . / 12)) %>%
+  rowwise() %>% #calculation in rows by rows
+  mutate(netincome_month = sum(c_across(starts_with("income")), na.rm = TRUE)) %>%
+  select(Address, netincome_month, province, Urban_Rural)
+# Monthly income from RU1402P4S04
+RU1402P4S04_monthlyinc <- RU1402P4S04 %>%
+  mutate(netincome_month = total_subsidy / 12) %>%
+  select(Address, netincome_month, province, Urban_Rural)
+
+# Combine Monthly income and calculate total monthly net income
+combined_monthlyinc <- bind_rows(RU1402P4S01_monthlyinc, RU1402P4S02_monthlyinc, RU1402P4S03_monthlyinc, RU1402P4S04_monthlyinc) %>%
+  dplyr::group_by(Address, province, Urban_Rural) %>%
+  dplyr::summarize(total_netincome_month = sum(netincome_month, na.rm = TRUE), .groups = 'drop') 
+```
+
+-   Fourth, we identify individuals earning below the poverty line.
+
+In this step, we only keep these individuals and exclude those above the
+poverty line.
+
+In addition, we calculate the ratio of individuals who are below the
+income poverty line. (Following Formula)
+
+$$\frac{1}{N}\sum_{j=1}^{q}\left(\frac{z-y_j}{z}\right)$$
+
+```{r}
+combined_monthlyinc <- combined_monthlyinc %>%
+  mutate(
+    Urban_Rural = case_when(
+      Urban_Rural == "U" ~ "Urban",
+      Urban_Rural == "R" ~ "Rural",
+      TRUE ~ Urban_Rural))
+# Join income_poverty_line & weight & member count to combined_income
+combined_monthlyinc <- combined_monthlyinc %>%
+  left_join(income_poverty_line, by = c("province","Urban_Rural")) %>%
+  left_join(RU1402P1_getweight, by = "Address") %>%
+  left_join(address_count, by = "Address")
+
+# Filter to keep rows where monthly net income is lower than income poverty line 1
+poverty_gap1 <- combined_monthlyinc %>%
+  # Filter the monthly net income of households below the income poverty line 1
+  filter(total_netincome_month < income_poverty_line1) %>%
+  # Calculate per capita monthly income (individual)
+  mutate(personal_netincome_month = total_netincome_month / member) %>%
+  # Calculate the ratio of net personal income to the income poverty line 1
+  mutate(ratio = (income_poverty_line1 - personal_netincome_month) / income_poverty_line1) %>%
+  group_by(province, Urban_Rural) %>%
+  dplyr::summarize(
+    sum_ratio = sum(Weight * ratio, na.rm = TRUE),  # Weighted sum of shortfall ratios
+    PGI_1 = 100 * round(sum_ratio / nrow(combined_monthlyinc), 7),   # Divide by total rows (N)
+    .groups = 'drop')
+
+# Filter to keep rows where monthly net income is lower than income poverty line 2
+poverty_gap2 <- combined_monthlyinc %>%
+  # Filter the monthly net income of households below the income poverty line 2
+  filter(total_netincome_month < income_poverty_line2) %>%
+  # Calculate per capita monthly income (individual)
+  mutate(personal_netincome_month = total_netincome_month / member) %>%
+  # Calculate the ratio of net personal income to the income poverty line 2
+  mutate(ratio = (income_poverty_line2 - personal_netincome_month) / income_poverty_line2) %>%
+  group_by(province, Urban_Rural) %>%
+  dplyr::summarize(
+    sum_ratio = sum(Weight * ratio, na.rm = TRUE),  # Weighted sum of shortfall ratios
+    PGI_2 = 100 * round(sum_ratio / nrow(combined_monthlyinc), 7),   # Divide by total rows (N)
+    .groups = 'drop')
+```
+
+```{r}
+poverty_gap_index <- poverty_gap1 %>%
+  left_join(poverty_gap2, by = c("province","Urban_Rural")) %>%
+  select(province, Urban_Rural, PGI_1, PGI_2)
+
+kable(
+  poverty_gap_index %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 4))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Poverty Gap Index (2 Methods)" = ncol(poverty_gap_index))) %>%
+  row_spec(which(poverty_gap_index$Urban_Rural == "Rural"), background = "lightsteelblue1") %>%
+  row_spec(which(poverty_gap_index$Urban_Rural == "Urban"), background = "mistyrose1")
+```
+
+In the first column, PGI 1, which comes from calculating the income
+poverty line 1, the highest PGI is related to the rural areas of
+[**'Sistan and Baluchestan'**]{style="color: blue;"} and
+[**'Hormozgan'**]{style="color: blue;"} and
+[**'Hamadan'**]{style="color: blue;"} provinces, respectively. The
+lowest PGI is related to the urban areas of [**'Chaharmahal and
+Bakhtiari'**]{style="color: blue;"} and
+[**'Semnan'**]{style="color: blue;"} and
+[**'Kerman'**]{style="color: blue;"} provinces, respectively. In the
+second column, PGI 2, which comes from calculating the income poverty
+line 2, the highest PGI is related to the rural and urban areas of
+[**'Sistan and Baluchestan'**]{style="color: blue;"} and rural areas of
+[**'Hormozgan'**]{style="color: blue;"} provinces. The lowest PGI is
+related to the rural and urban areas of [**'Chaharmahal and
+Bakhtiari'**]{style="color: blue;"} and urban areas of
+[**'Semnan'**]{style="color: blue;"} provinces.
+
+------------------------------------------------------------------------
+
+### 4. Multidimensional Poverty Index (MPI)
+
+In the previous sections, we focused on estimating the poverty line
+based on food bundles. In this section, we expand our analysis to
+include other **important aspects** of life, such as
+[**'education'**]{style="color: red;"},
+[**'health'**]{style="color: red;"}, and
+[**'nutrition'**]{style="color: red;"}. Based on an article from [World
+Bank](https://www.worldbank.org/en/topic/poverty/brief/multidimensional-poverty-measure)
+about **"Multidimensional Poverty Measure"**, we follow the following
+construction. We will calculate the **Multidimensional Poverty Index
+(MPI)**, which measures the percentage of households in a country that
+are deprived in three areas: [**'monetary
+poverty'**]{style="color: blue;"},
+[**'education'**]{style="color: blue;"}, and [**'access to basic
+infrastructure services'**]{style="color: blue;"}. This approach
+provides a more comprehensive understanding of poverty by considering
+various dimensions of **well-being** beyond just financial resources.
+
+In this part, we consider the 4 aspects of poverty including;
+
+1.  Monetary Dimension
+
+2.  Education Dimension
+
+3.  Living Standards Dimension
+
+Then, we will use following equation to estimate multidimensional
+poverty index:
+
+$$
+MPI = \sum_{i=1}^{n} W_i D_i
+$$
+
+where $W_{i}$ is the weight of indicator $D_{i}$.
+
+In this section, we define the first dimension:
+([**Income**]{style="color: blue;"})
+
+In this step, we identify the individuals who have a monthly total net
+income below the income poverty line. To aim this process, we create the
+following dummy:
+
+-   If a household is below the income poverty line,
+    $\text{dummy income poverty line} = 1$
+
+-   If a household is not below the income poverty line,
+    $\text{dummy income poverty line} = 0$
+
+```{r warning=FALSE}
+combined_monthlyinc_dum1 <- combined_monthlyinc %>%
+  mutate(dummy_below_poverty = ifelse((total_netincome_month / member) < income_poverty_line1, 1, 0))
+# poverty status information
+RU1402P1_dum <- RU1402P1 %>%
+  left_join(combined_monthlyinc_dum1 %>% select(Address, dummy_below_poverty), by = "Address") %>%
+  # Handle Missing Values
+  mutate(income_poverty_dummy = ifelse(is.na(dummy_below_poverty), 0, dummy_below_poverty)) %>%
+  select(-dummy_below_poverty)
+```
+
+In this section, we define the second dimension:
+([**Consumption**]{style="color: blue;"})
+
+In this step, we first identify the individuals who have a monthly total
+consumption below the consumption poverty line. To aim this process, we
+create the following dummy:
+
+-   If a household is below the consumption poverty line,
+    $\text{dummy consumption poverty line} = 1$
+
+-   If a household is not below the consumption poverty line,
+    $\text{dummy consumption poverty line} = 0$
+
+```{r warning=FALSE}
+consumption <- filtered_RU1402P3S01 %>%
+  dplyr::group_by(Address, province, Urban_Rural, label) %>%
+  dplyr::summarize(mean_consumption = round(weighted.mean(kilogram, Weight, na.rm = TRUE), 3), .groups = 'drop') 
+
+consumption <- consumption %>%
+  mutate(cal_per_kg = case_when(
+    label == "bread" ~ 2660,
+    label == "cheese" ~ 3500,
+    label == "egg" ~ 1470,
+    label == "fruit" ~ 500,
+    label == "oil" ~ 8840,
+    label == "potato" ~ 1040,
+    label == "rice" ~ 1350,
+    label == "soda" ~ 380,
+    label == "sugar" ~ 3870,
+    label == "tomato paste" ~ 820,
+    label == "vegetables" ~ 200,
+    label == "yoghurt" ~ 990,
+    label == "white meat" ~ 2200,
+    label == "milk" ~ 500,
+    label == "biscuit" ~ 3250,
+    label == "salt" ~ 0,
+    label == "spaghetti" ~ 1570,
+    label == "zardchobe" ~ 3540,
+    label == "ice cream" ~ 2010,
+    label == "lentil" ~ 1650,
+    label == "margarine" ~ 5260,
+    label == "non-irani tea" ~ 10,
+    label == "spices" ~ 3140,
+    label == "cake" ~ 3800,
+    label == "chips & pofak" ~ 5200,
+    label == "flour" ~ 3640,
+    TRUE ~ NA_real_))
+
+consumption_dummy <- consumption %>%
+  # Calculate total calories consumed per label in a month
+  mutate(total_calories = mean_consumption * cal_per_kg, na.rm = TRUE) %>%
+  # Group by Address, Province, and Urban_Rural areas
+  group_by(Address, province) %>%
+  # Calculate the total calories of households in a month in each province
+  dplyr::summarize(Total_calories = sum(total_calories, na.rm = TRUE), .groups = 'drop') %>%
+  # Calculate daily calories in each household
+  mutate(daily_calories = Total_calories / 30) %>%
+  left_join(address_count, by = "Address") %>%
+  # Calculate the daily personal calorie consumption
+  mutate(daily_personal_calories = daily_calories / member) %>% 
+  left_join(average_consumption, by = "province") %>% 
+  mutate(below_calorie_dummy = ifelse(daily_personal_calories < average_personal_calories, 1, 0))
+
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(consumption_dummy %>% select(Address, below_calorie_dummy), by = "Address") %>%
+  mutate(consumption_poverty_dummy = ifelse(is.na(below_calorie_dummy), 0, below_calorie_dummy)) %>% 
+  select(-below_calorie_dummy)
+```
+
+In this section, we define the third dimension:
+([**education**]{style="color: blue;"})
+
+First, we define a dummy variable for the [**education of household's
+head**]{style="color: red;"}.
+
+Second, we define a dummy variable for the [**attendance of children at
+school**]{style="color: red;"}.
+
+Here, the [**thresholds**]{style="color: blue;"} that we consider for
+not being deprived of education is that the household's head is
+**literate** and the children **attend school**.
+
+-   If a Household's Head is Literate, $\text{Head's Education} = 0$
+
+-   If a Household's Child is between 7 and 18 and is going to school,
+    $\text{Child's Education} = 0$
+
+```{r warning=FALSE}
+# For Head
+RU1402P1_dum <- RU1402P1_dum %>%
+  group_by(Address) %>%
+  mutate(head_education_dummy = case_when(
+    any(relation == "head" & literacy == "illiterate", na.rm = TRUE) ~ 1,
+    any(relation == "head" & literacy != "illiterate", na.rm = TRUE) ~ 0,
+    TRUE ~ NA_real_))
+# For Children
+RU1402P1_dum <- RU1402P1_dum %>%
+  group_by(Address) %>%
+  mutate(child_education_dummy = ifelse(any(relation == "child" & age >= 7 & age <= 18 & is_studying == "No", na.rm = TRUE), 1, 0)) %>%
+  ungroup()
+```
+
+In this section, we define the fourth dimension: ([**Living
+Standards**]{style="color: blue;"})
+
+First, we define a dummy variable for the [**Per Capita Living
+Area**]{style="color: red;"}.
+
+Second, we define a dummy variable for the [**Being a
+Homeowner**]{style="color: red;"}.
+
+Third, we define a dummy variable for the [**Access to Necessary Home
+Items**]{style="color: red;"}.
+
+Forth, we define a dummy variable for the [**Access to Internet and Cell
+Phone**]{style="color: red;"}.
+
+Here, the [**thresholds**]{style="color: blue;"} that we consider for
+the Living Standards are:
+
+-   According to Tehran Municipality's regulations and guidelines, the
+    [**Per Capita Living Area**]{style="color: red;"} per person is
+    **17.5 square meters**.
+
+-   If a Household owns its House, $\text{Home Owenship} = 0$.
+
+-   If a Household has access to more than 3 of 5 necessary Home Items,
+    $\text{Home Accessibility} = 0$.
+
+    (necessary home items include TV, washing machine, refrigerator,
+    freezer and stove)
+
+-   If a Household has access to Internet and Cell Phone,
+    $\text{Technology Accessibility} = 0$.
+
+```{r warning=FALSE}
+# Dummy for Home Ownership
+RU1402P2 <- RU1402P2 %>%
+  mutate(ownership_dummy = ifelse(tenure %in% c("OwnedEstateLand", "OwnedEstate", "Free"), 0, 1))
+
+RU1402P2 <- RU1402P2 %>%
+  mutate(Address = as.numeric(Address))
+#Merging it
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(RU1402P2 %>% select(Address, ownership_dummy), by = "Address") %>%
+  mutate(tenure = ifelse(is.na(ownership_dummy), 1, ownership_dummy)) %>%
+  select(-ownership_dummy)
+
+RU1402P2 <- merge(RU1402P2, address_count, by = "Address", all.x = TRUE)
+
+# Calculate space_per_capita
+RU1402P2 <- RU1402P2 %>%
+  mutate(space_per_capita = space / member)
+
+# Create a dummy variable for space_per_capita < 17.5
+address_space_issue <- RU1402P2 %>%
+  mutate(space_issue = ifelse(space_per_capita < 17.5, 1, 0)) %>%
+  select(Address, space_issue)
+
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(address_space_issue, by = "Address") %>%
+  mutate(space_issue = ifelse(is.na(space_issue), 0, space_issue))
+
+#internet
+RU1402P2 <- RU1402P2 %>%
+  mutate(no_internet_dummy = ifelse(internet == "FALSE", 1, 0))
+
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(RU1402P2 %>% select(Address, no_internet_dummy), by = "Address") %>%
+  mutate(no_internet_dummy = ifelse(is.na(no_internet_dummy), 0, no_internet_dummy))
+
+#cellphone
+RU1402P2 <- RU1402P2 %>%
+  mutate(no_mobile_dummy = ifelse(cellphone == "FALSE", 1, 0))
+
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(RU1402P2 %>% select(Address, no_mobile_dummy), by = "Address") %>%
+  mutate(no_mobile_dummy = ifelse(is.na(no_mobile_dummy), 0, no_mobile_dummy))
+
+RU1402P2 <- RU1402P2 %>%
+  mutate(lack_appliances = ifelse((TV + washingmachine + refridgerator + freezer + stove) < 3, 1, 0))
+
+RU1402P1_dum <- RU1402P1_dum %>%
+  left_join(RU1402P2 %>% select(Address, lack_appliances), by = "Address") %>%
+  mutate(lack_appliances = ifelse(is.na(lack_appliances), 0, lack_appliances))
+```
+
+In this section, we calculate the multidimensional poverty index by
+considering an equally weighted average of the variables mentioned above
+for each province. A higher index value indicates a worse poverty
+situation in that province.
+
+```{r warning=FALSE}
+RU1402P1_dum <- RU1402P1_dum %>%
+  rename(
+    Below_income_dummy = income_poverty_dummy,
+    Below_consumption_dummy = consumption_poverty_dummy ,
+    Head_educ_dummy = head_education_dummy,
+    Child_educ_dummy = child_education_dummy,
+    Ownership_dummy = tenure,
+    Living_space_dummy = space_issue,
+    Internet_dummy = no_internet_dummy,
+    Cellphone_dummy = no_mobile_dummy,
+    Appliance_dummy = lack_appliances)
+
+MDP_index <- RU1402P1_dum %>%
+  select(Address, member,
+    Below_income_dummy, Below_consumption_dummy,
+    Head_educ_dummy, Child_educ_dummy,
+    Ownership_dummy, Living_space_dummy,
+    Internet_dummy, Cellphone_dummy, Appliance_dummy)
+
+MDP_index <- MDP_index %>%
+  mutate(
+    province = fct_recode(as.factor(substr(Address, 2, 3)), !!!Province),
+
+    # Monetary Dimension (Total Weight = 1/3)
+    Monetary_Score = (Below_consumption_dummy * 1/6 + Below_income_dummy * 1/6),
+    
+    # Education Dimension (Total Weight = 1/3)
+    Education_Score = (Head_educ_dummy * 1/6 + Child_educ_dummy * 1/6),
+
+    # Living Standards Dimension (Total Weight = 1/3)
+    Living_Standards_Score = (Ownership_dummy * 1/15 + Living_space_dummy * 1/15 +
+                              Internet_dummy * 1/15 + Cellphone_dummy * 1/15 +
+                              Appliance_dummy * 1/15),
+    # Total MPI Score
+    MPI_Score = Monetary_Score + Education_Score + Living_Standards_Score
+  ) %>%
+  select(Address, member, province, Monetary_Score, Education_Score, Living_Standards_Score, MPI_Score)
+
+MDP_index <- MDP_index %>%
+  left_join(RU1402P1_getweight, by = "Address")
+# Calculate the weighted average of MPI scores for each province
+MDP_index_province <- MDP_index %>%
+  group_by(province) %>%
+  dplyr::summarize(weighted_average_MPI = sum(MPI_Score * Weight, na.rm = TRUE) / sum(Weight, na.rm = TRUE)) %>% 
+  arrange(weighted_average_MPI)
+
+kable(
+  MDP_index_province %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 3))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Multi Dimentional Poverty Index (Household)" = ncol(MDP_index_province))) %>%
+  column_spec(1, background = "mediumslateblue") %>%
+  column_spec(2, background = "mediumspringgreen")
+```
+
+3 Provinces with highest MPI Score are [**'Sistan and
+Baluchestan'**]{style="color: blue;"} **(0.43)** and [**'West
+Azerbaijan'**]{style="color: blue;"} **(0.30)** and
+[**'Kerman'**]{style="color: blue;"} **(0.27)**.
+
+3 Provinces with lowest MPI Score are [**'Chaharmahal and
+Bakhtiari'**]{style="color: blue;"} **(0.13)** and
+[**'Mazandaran'**]{style="color: blue;"} **(0.13)** and
+[**'Yazd'**]{style="color: blue;"} **(0.14)**.
+
+------------------------------------------------------------------------
+
+## Inequality Analysis
+
+### 1. Estimation of Inequality Metrics
+
+-   **Gini Coefficient**
+
+#### Import the Data
+
+First, we must download and import the data from the
+[Website](https://refahdb.mcls.gov.ir/fa/downloaddata-%d8%af%d8%a7%d9%86%d9%84%d9%88%d8%af%d8%af%d8%a7%d8%af%d9%87)
+of Iran's Ministry of Cooperatives, Labor, and Social Welfare.
+
+```{r}
+welfare_dta <- read.csv('/Users/mahan/Desktop/TEIAS/3th-Semester/DevEcon1/Project2/Data/PaygahRefah/nemone_2_darsadi_1402.csv')
+```
+
+In this Step, We calculate the Revenue for each ID.
+
+Since the **"Daramad"** column is **NA** for many observations, we
+combine "**CardPerMonth_1402**" column with "**Daramad**" column to
+create an alternative proxy for income.
+
+```{r}
+Revenue <- welfare_dta %>%
+  select(id, SabteAhval_provincename, CardPerMonth_1402, Daramad) %>%
+  filter(!(is.na(CardPerMonth_1402) & is.na(Daramad))) %>%
+  mutate(Total_Revenue = (CardPerMonth_1402 * 12) + Daramad)
+```
+
+We also consider assets as an indication of wealth distribution, since
+it is common to estimate the **Gini Coefficient** for both wealth and
+income.
+
+For Total Asset, we combine **"CarsPrice**" with
+**"Bourse_NetPortfoValue"** column to create an alternative proxy for
+asset.
+
+```{r}
+Asset <- welfare_dta %>%
+  select(id, SabteAhval_provincename, CarsPrice, Bourse_NetPortfoValue) %>%
+  filter(!(is.na(CarsPrice) & is.na(Bourse_NetPortfoValue))) %>%
+  mutate(Total_Asset = CarsPrice + Bourse_NetPortfoValue)
+```
+
+In this part, we estimate the **Gini Coefficient** for both wealth and
+income from "Iranian welfare database" and plot the Lorenz Curve.
+
+```{r, echo=TRUE, fig.width=8, fig.height=6}
+# Compute Lorenz curves
+lorenz_revenue <- Lc(Revenue$Total_Revenue)
+lorenz_asset <- Lc(Asset$Total_Asset)
+lorenz_HEIS <- Lc(combined_monthlyinc$total_netincome_month/combined_monthlyinc$member)
+
+# Compute Gini coefficients
+gini_revenue <- round(Gini(Revenue$Total_Revenue), 5) 
+gini_asset <- round(Gini(Asset$Total_Asset), 5)
+gini_HEIS <- round(Gini(combined_monthlyinc$total_netincome_month/combined_monthlyinc$member), 5)
+
+# Plot Lorenz curves
+plot(lorenz_revenue,
+     main = "Lorenz Curves for Revenue and Asset Distribution",
+     xlab = "Cumulative Share of Population",
+     ylab = "Cumulative Share of Revenue & Asset",
+     col = "blue",
+     lwd = 2)
+
+# Add Lorenz curve for Asset
+lines(lorenz_asset, col = "red", lwd = 2)
+
+lines(lorenz_HEIS, col = "darkgreen", lwd = 3)
+
+# Add the line of perfect equality
+abline(0, 1, col = "black", lty = 2)
+
+# Add legend
+legend("topleft",
+       legend = c("Revenue - Welfare DataBase", "Asset - Welfare DataBase", "Revenue - HEIS", "Line of Equality"),
+       col = c("blue", "red","darkgreen", "black"),
+       lty = c(1, 1, 1, 1),
+       lwd = c(2, 2, 2, 2),
+       bg = "white")
+# Add Gini coefficient text directly on the plot
+text(0.8, 0.25, paste("Gini (Revenue - WelfareDataBase):", gini_revenue), col = "blue", cex = 0.7)
+text(0.8, 0.15, paste("Gini (Asset - WelfareDataBase):", gini_asset), col = "red", cex = 0.7)
+text(0.5, 0.30, paste("Gini (Revenue - HEIS):", gini_HEIS), col = "darkgreen", cex = 0.7)
+```
+
+The primary reason for the high value of the Gini coefficient is that we
+used a proxy variable, which may not accurately reflect the distribution
+of income and wealth in society. Additionally, the estimation of this
+coefficient was based on only 2% of data from the Iranian Welfare
+Database, which may not adequately represent the entire population and
+could be biased.
+
+Since the **Gini Coefficient** for both **income** and **asset**
+measures is approximately similar, we will only focus on the **Gini
+Coefficient in Revenue**.
+
+In this part, we focus more precisely on the provincial level to
+calculate the Gini coefficient for both data sources.
+
+```{r}
+Gini_province_HEIS <- combined_monthlyinc %>% 
+  group_by(province) %>% 
+  dplyr::summarize(Gini_Coef_HEIS = Gini(total_netincome_month/member))
+
+Gini_province_welfare <- Revenue %>%
+  rename(province = SabteAhval_provincename) %>%
+  filter(!is.na(Total_Revenue) & !is.na(province)) %>% 
+  group_by(province) %>%
+  dplyr::summarize(Gini_Coef_Welfare = Gini(Total_Revenue)) %>%
+  mutate(province = case_when(
+    province == "آذربایجان شرقی" ~ "East Azerbaijan",
+    province == "آذربایجان غربی" ~ "West Azerbaijan",
+    province == "اردبیل" ~ "Ardabil",
+    province == "اصفهان" ~ "Isfahan",
+    province == "البرز" ~ "Alborz",
+    province == "ایلام" ~ "Ilam",
+    province == "بوشهر" ~ "Bushehr",
+    province == "تهران" ~ "Tehran",
+    province == "خراسان جنوبی" ~ "South Khorasan",
+    province == "خراسان رضوی" ~ "Razavi Khorasan",
+    province == "خراسان شمالی" ~ "North Khorasan",
+    province == "خوزستان" ~ "Khuzestan",
+    province == "زنجان" ~ "Zanjan",
+    province == "سمنان" ~ "Semnan",
+    province == "سیستان وبلوچستان" ~ "Sistan and Baluchestan",
+    province == "فارس" ~ "Fars",
+    province == "قزوین" ~ "Qazvin",
+    province == "قم" ~ "Qom",
+    province == "لرستان" ~ "Lorestan",
+    province == "مازندران" ~ "Mazandaran",
+    province == "مرکزی" ~ "Markazi",
+    province == "هرمزگان" ~ "Hormozgan",
+    province == "همدان" ~ "Hamadan",
+    province == "چهارمحال وبختیاری" ~ "Chaharmahal and Bakhtiari",
+    province == "کردستان" ~ "Kurdistan",
+    province == "کرمان" ~ "Kerman",
+    province == "کرمانشاه" ~ "Kermanshah",
+    province == "کهگیلویه وبویراحمد" ~ "Kohgiluyeh and Boyer-Ahmad",
+    province == "گلستان" ~ "Golestan",
+    province == "گیلان" ~ "Gilan",
+    province == "یزد" ~ "Yazd",
+    TRUE ~ province)) %>% 
+  slice(-1)
+
+Gini_province <- Gini_province_HEIS %>% 
+  left_join(Gini_province_welfare, by = "province") %>% 
+  arrange(Gini_Coef_HEIS)
+kable(Gini_province %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", big.mark = ",", digits = 3))), align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), position = "center", full_width = FALSE) %>%
+  add_header_above(c("Gini Coefficient (Province Level - Both Data)" = ncol(Gini_province))) %>%
+  column_spec(1, background = "brown1") %>%
+  column_spec(2, background = "chartreuse1") %>%
+  column_spec(3, background = "cadetblue1")
+```
+
+-   **Top 1% Share**
+
+```{r}
+# # Arrange the data by descending Total_Revenue
+# sorted_Revenue <- Revenue %>%
+#   arrange(desc(Total_Revenue))
+# 
+# # Calculate the total revenue once, outside the grouped environment
+# total_revenue_pop <- sum(sorted_Revenue$Total_Revenue, na.rm = TRUE)
+# 
+# # Process the data and calculate the top 1% revenue share by province
+# top1perc_Revenue <- sorted_Revenue %>% 
+#   filter(row_number() <= ceiling(0.01 * n())) %>% 
+#   rename(province = SabteAhval_provincename) %>%
+#   filter(!is.na(Total_Revenue) & !is.na(province)) %>%
+#   group_by(province) %>%
+#   dplyr::summarize(
+#     Top1Percent = sum(Total_Revenue, na.rm = TRUE) / total_revenue_pop
+#   ) %>%
+#   ungroup() %>%
+#   mutate(province = case_when(
+#     province == "آذربایجان شرقی" ~ "East Azerbaijan",
+#     province == "آذربایجان غربی" ~ "West Azerbaijan",
+#     province == "اردبیل" ~ "Ardabil",
+#     province == "اصفهان" ~ "Isfahan",
+#     province == "البرز" ~ "Alborz",
+#     province == "ایلام" ~ "Ilam",
+#     province == "بوشهر" ~ "Bushehr",
+#     province == "تهران" ~ "Tehran",
+#     province == "خراسان جنوبی" ~ "South Khorasan",
+#     province == "خراسان رضوی" ~ "Razavi Khorasan",
+#     province == "خراسان شمالی" ~ "North Khorasan",
+#     province == "خوزستان" ~ "Khuzestan",
+#     province == "زنجان" ~ "Zanjan",
+#     province == "سمنان" ~ "Semnan",
+#     province == "سیستان وبلوچستان" ~ "Sistan and Baluchestan",
+#     province == "فارس" ~ "Fars",
+#     province == "قزوین" ~ "Qazvin",
+#     province == "قم" ~ "Qom",
+#     province == "لرستان" ~ "Lorestan",
+#     province == "مازندران" ~ "Mazandaran",
+#     province == "مرکزی" ~ "Markazi",
+#     province == "هرمزگان" ~ "Hormozgan",
+#     province == "همدان" ~ "Hamadan",
+#     province == "چهارمحال وبختیاری" ~ "Chaharmahal and Bakhtiari",
+#     province == "کردستان" ~ "Kurdistan",
+#     province == "کرمان" ~ "Kerman",
+#     province == "کرمانشاه" ~ "Kermanshah",
+#     province == "کهگیلویه وبویراحمد" ~ "Kohgiluyeh and Boyer-Ahmad",
+#     province == "گلستان" ~ "Golestan",
+#     province == "گیلان" ~ "Gilan",
+#     province == "یزد" ~ "Yazd",
+#     TRUE ~ province)) %>% 
+#   slice(-1)
+# 
+# # Arrange the data by descending Total_Revenue
+# sorted_income_HEIS <- combined_monthlyinc %>%
+#   arrange(desc(total_netincome_month))
+# 
+# # Calculate the total revenue once, outside the grouped environment
+# total_income_pop <- sum(sorted_income_HEIS$total_netincome_month, na.rm = TRUE)/sum(sorted_income_HEIS$member, na.rm = TRUE)
+# 
+# # Process the data and calculate the top 1% revenue share by province
+# top1perc_income <- sorted_income_HEIS %>% 
+#   filter(row_number() <= ceiling(0.01 * n())) %>% 
+#   group_by(province) %>%
+#   dplyr::summarize(
+#     Top1Percent = sum(total_netincome_month, na.rm = TRUE) / total_income_pop) %>%
+#   ungroup()
+
+```
+In this section, we will save the necessary data frames in CSV format. (Optional)
+```{r}
+write_csv(TC_province1, "/Users/mahan/Desktop/Poverty/Atlas Poverty/TC_province1.csv")
+write_csv(relative_line, "/Users/mahan/Desktop/Poverty/Atlas Poverty/relative_line.csv")
+write_csv(hybrid_poverty_line, "/Users/mahan/Desktop/Poverty/Atlas Poverty/hybrid_poverty_line.csv")
+write_csv(income_poverty_line, "/Users/mahan/Desktop/Poverty/Atlas Poverty/income_poverty_line.csv")
+write_csv(poverty_gap_index, "/Users/mahan/Desktop/Poverty/Atlas Poverty/poverty_gap_index.csv")
+write_csv(MDP_index_province, "/Users/mahan/Desktop/Poverty/Atlas Poverty/MDP_index_province.csv")
+write_csv(Gini_province, "/Users/mahan/Desktop/Poverty/Atlas Poverty/Gini_province.csv")
+```

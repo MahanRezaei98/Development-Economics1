@@ -1,0 +1,39 @@
+/* Set font family, line height, and background color for the entire document */
+body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* Choose a suitable font */
+  line-height: 1.6; /* Set the line height for better readability */
+  background-color: #FDFEFE; /* Set the background color to super light creamy */
+  color: #333; /* Set the text color */
+  padding: 20px; /* Add padding around the content */
+}
+
+/* Style headings with different colors for better visibility */
+h1, h2, h3, h4, h5, h6 {
+  color: #00284D; /* Set heading text color to a shade of Navy Blue */
+}
+
+/* Style code blocks to make them visually distinct */
+code {
+  background-color: #f8f8f8; /* Set background color for code blocks */
+  border: 1px solid #e1e1e1; /* Add border to separate code blocks */
+  padding: 2px 4px; /* Add padding inside the code blocks */
+  border-radius: 4px; /* Add border radius for a rounded appearance */
+}
+
+/* Style preformatted text blocks for better presentation */
+pre {
+  background-color: #f8f8f8; /* Set background color for preformatted text */
+  border: 1px solid #e1e1e1; /* Add border to separate preformatted text */
+  padding: 10px; /* Add padding inside the preformatted text */
+  border-radius: 4px; /* Add border radius for a rounded appearance */
+}
+
+/* Style the navbar for better navigation experience */
+.navbar {
+  background-color: #001D2E; /* Set background color for the navbar to slightly darker Navy Blue */
+}
+
+/* Style the navbar brand and links for better visibility */
+.navbar-brand, .navbar-nav > li > a {
+  color: white !important; /* Set text color to white for better contrast */
+}
